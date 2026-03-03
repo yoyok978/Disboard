@@ -5,12 +5,16 @@ import { setupDiscordSdk } from './discord';
 import { useYjsStore } from './useYjsStore';
 
 function Whiteboard({ roomId }) {
-    // Determine the WebSocket URL based on the environment
-    const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    // Determine the WebSocket URL.
+    // If we are developing locally (either on localhost OR via the trycloudflare.com tunnel),
+    // we should use the local Vite proxy. Wait to use Render until actually deployed on Vercel.
+    const isLocalDevelopment = window.location.hostname === 'localhost' ||
+        window.location.hostname === '127.0.0.1' ||
+        window.location.hostname.endsWith('.trycloudflare.com');
 
-    // For local dev, use the Vite proxy. For production (Vercel), use the live Render URL.
-    const HOST_URL = isLocalhost
-        ? `ws://${window.location.host}/ws`
+    // For local dev/tunnel, use the Vite proxy. For production (Vercel), use the live Render URL.
+    const HOST_URL = isLocalDevelopment
+        ? `wss://${window.location.host}/ws`
         : 'wss://disboard-xb6e.onrender.com';
 
     const { store, status } = useYjsStore({ roomId, hostUrl: HOST_URL });
