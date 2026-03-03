@@ -1,9 +1,12 @@
 import { DiscordSDK } from "@discord/embedded-app-sdk";
 
-let sdkInstance = null;
+const clientId = import.meta.env.VITE_DISCORD_CLIENT_ID;
 
 try {
-    sdkInstance = new DiscordSDK(import.meta.env.VITE_DISCORD_CLIENT_ID || 'dummy-client-id');
+    if (!clientId || clientId === 'dummy-client-id') {
+        console.warn("VITE_DISCORD_CLIENT_ID is missing from environment variables.");
+    }
+    sdkInstance = new DiscordSDK(clientId || 'dummy-client-id');
 } catch (e) {
     console.warn("Could not initialize Discord SDK. Running in local browser mode.", e.message);
 }
@@ -17,6 +20,14 @@ export const discordSdk = sdkInstance;
 export async function setupDiscordSdk() {
     // Check if we are running in an iframe
     const inIframe = window.parent !== window;
+
+    if (!clientId || clientId === 'dummy-client-id') {
+        console.warn("Missing VITE_DISCORD_CLIENT_ID. Returning missing-client-id fallback.");
+        return {
+            roomId: 'local-browser-room',
+            user: createFallbackUser('missing-client-id'),
+        };
+    }
 
     if (!discordSdk || !inIframe) {
         console.log("Not running in an embedded iframe (or SDK missing). Returning local room fallback.");
