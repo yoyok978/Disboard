@@ -10,6 +10,7 @@ import { getAssetUrls } from '@tldraw/assets/selfHosted';
 
 function Whiteboard({ roomId, user }) {
     const containerRef = useRef(null);
+    const editorRef = useRef(null);
 
     const isLocalDevelopment = window.location.hostname === 'localhost' ||
         window.location.hostname === '127.0.0.1' ||
@@ -24,32 +25,30 @@ function Whiteboard({ roomId, user }) {
 
     const { store, status, provider } = useYjsStore({ roomId, hostUrl: HOST_URL, user });
 
-    // Use a document-level pointermove listener so we capture movement
-    // even when tldraw has pointer capture on its canvas.
+    const handleMount = useCallback((editor) => {
+        editorRef.current = editor;
+    }, []);
+
+    // Broadcast cursor in tldraw PAGE coordinates so it matches the canvas
     useEffect(() => {
         if (!provider?.awareness) return;
-        const container = containerRef.current;
-        if (!container) return;
 
         const onPointerMove = (e) => {
-            const rect = container.getBoundingClientRect();
+            const editor = editorRef.current;
+            if (!editor) return;
+
+            // Use tldraw's screenToPage to convert viewport pixels → canvas coords
+            const pagePoint = editor.screenToPage({ x: e.clientX, y: e.clientY });
             provider.awareness.setLocalStateField('cursor', {
-                x: e.clientX - rect.left,
-                y: e.clientY - rect.top,
+                x: pagePoint.x,
+                y: pagePoint.y,
             });
         };
 
-        const onPointerLeave = () => {
-            provider.awareness.setLocalStateField('cursor', null);
-        };
-
-        // Capture phase ensures we intercept before tldraw can stop propagation
         document.addEventListener('pointermove', onPointerMove, true);
-        document.addEventListener('pointerleave', onPointerLeave, true);
 
         return () => {
             document.removeEventListener('pointermove', onPointerMove, true);
-            document.removeEventListener('pointerleave', onPointerLeave, true);
         };
     }, [provider]);
 
@@ -61,8 +60,8 @@ function Whiteboard({ roomId, user }) {
 
     return (
         <div ref={containerRef} style={{ position: 'fixed', inset: 0 }}>
-            <Tldraw store={store} assetUrls={assetUrls} />
-            <CursorOverlay awareness={provider?.awareness} />
+            <Tldraw store={store} assetUrls={assetUrls} onMount={handleMount} />
+            <CursorOverlay awareness={provider?.awareness} editorRef={editorRef} />
             <UsersSidebar awareness={provider?.awareness} currentUser={user} />
         </div>
     );

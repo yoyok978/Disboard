@@ -2,17 +2,19 @@ import React, { useEffect, useState, useRef } from 'react';
 
 /**
  * Renders remote users' cursors on top of the tldraw canvas.
- * Each cursor shows a small arrow + circular Discord profile picture.
+ * Cursor positions are stored in PAGE (canvas) space and converted
+ * to screen coordinates using editor.pageToScreen() for rendering.
+ * Also re-renders when the local camera moves so cursors stay in place.
  */
-export default function CursorOverlay({ awareness }) {
+export default function CursorOverlay({ awareness, editorRef }) {
     const [cursors, setCursors] = useState([]);
     const rafRef = useRef(null);
-    const pendingUpdate = useRef(false);
 
     useEffect(() => {
         if (!awareness) return;
 
-        const updateCursors = () => {
+        const computeCursors = () => {
+            const editor = editorRef?.current;
             const states = awareness.getStates();
             const remoteCursors = [];
 
@@ -20,10 +22,26 @@ export default function CursorOverlay({ awareness }) {
                 if (clientId === awareness.clientID) return;
                 if (!state.cursor || !state.user) return;
 
+                let screenX = state.cursor.x;
+                let screenY = state.cursor.y;
+
+                if (editor) {
+                    try {
+                        const screenPoint = editor.pageToScreen({
+                            x: state.cursor.x,
+                            y: state.cursor.y,
+                        });
+                        screenX = screenPoint.x;
+                        screenY = screenPoint.y;
+                    } catch (err) {
+                        // Fallback if editor isn't ready yet
+                    }
+                }
+
                 remoteCursors.push({
                     clientId,
-                    x: state.cursor.x,
-                    y: state.cursor.y,
+                    x: screenX,
+                    y: screenY,
                     name: state.user.name,
                     avatarUrl: state.user.avatarUrl,
                     color: state.user.color || '#5865F2',
@@ -31,24 +49,32 @@ export default function CursorOverlay({ awareness }) {
             });
 
             setCursors(remoteCursors);
-            pendingUpdate.current = false;
         };
 
-        const onAwarenessChange = () => {
-            if (!pendingUpdate.current) {
-                pendingUpdate.current = true;
-                rafRef.current = requestAnimationFrame(updateCursors);
-            }
+        const scheduleUpdate = () => {
+            if (rafRef.current) cancelAnimationFrame(rafRef.current);
+            rafRef.current = requestAnimationFrame(computeCursors);
         };
 
-        awareness.on('change', onAwarenessChange);
-        updateCursors();
+        // Re-compute when awareness changes (remote cursor moved)
+        awareness.on('change', scheduleUpdate);
+
+        // Also re-compute on local camera changes (pan/zoom) so remote cursors
+        // reposition on screen even when they aren't moving
+        const onPointerMove = () => scheduleUpdate();
+        const onWheel = () => scheduleUpdate();
+        document.addEventListener('pointermove', onPointerMove, true);
+        document.addEventListener('wheel', onWheel, true);
+
+        computeCursors();
 
         return () => {
-            awareness.off('change', onAwarenessChange);
+            awareness.off('change', scheduleUpdate);
+            document.removeEventListener('pointermove', onPointerMove, true);
+            document.removeEventListener('wheel', onWheel, true);
             if (rafRef.current) cancelAnimationFrame(rafRef.current);
         };
-    }, [awareness]);
+    }, [awareness, editorRef]);
 
     if (cursors.length === 0) return null;
 
@@ -62,7 +88,6 @@ export default function CursorOverlay({ awareness }) {
                         transform: `translate(${cursor.x}px, ${cursor.y}px)`,
                     }}
                 >
-                    {/* SVG cursor arrow */}
                     <svg
                         className="cursor-arrow"
                         width="16"
@@ -80,7 +105,6 @@ export default function CursorOverlay({ awareness }) {
                         />
                     </svg>
 
-                    {/* Avatar circle */}
                     <div
                         className="cursor-avatar"
                         style={{
@@ -89,11 +113,7 @@ export default function CursorOverlay({ awareness }) {
                         }}
                     >
                         {cursor.avatarUrl ? (
-                            <img
-                                src={cursor.avatarUrl}
-                                alt={cursor.name}
-                                draggable={false}
-                            />
+                            <img src={cursor.avatarUrl} alt={cursor.name} draggable={false} />
                         ) : (
                             <span className="cursor-avatar-fallback">
                                 {cursor.name.charAt(0).toUpperCase()}
@@ -101,7 +121,6 @@ export default function CursorOverlay({ awareness }) {
                         )}
                     </div>
 
-                    {/* Name label */}
                     <div
                         className="cursor-name"
                         style={{ backgroundColor: cursor.color }}
