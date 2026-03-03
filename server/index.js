@@ -37,7 +37,23 @@ app.post('/api/token', async (req, res) => {
             console.error('[Disboard] Token exchange failed:', data);
             return res.status(response.status).json(data);
         }
-        res.json({ access_token: data.access_token });
+
+        // Fetch user profile from Discord directly on the backend to avoid frontend CORS
+        let userData = null;
+        try {
+            const userRes = await fetch('https://discord.com/api/users/@me', {
+                headers: { Authorization: `Bearer ${data.access_token}` },
+            });
+            if (userRes.ok) {
+                userData = await userRes.json();
+            } else {
+                console.warn('[Disboard] Failed to fetch user from Discord API:', await userRes.text());
+            }
+        } catch (userErr) {
+            console.error('[Disboard] Error fetching user profile:', userErr);
+        }
+
+        res.json({ access_token: data.access_token, user: userData });
     } catch (err) {
         console.error('[Disboard] Token exchange error:', err);
         res.status(500).json({ error: 'Token exchange failed' });

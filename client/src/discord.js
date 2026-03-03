@@ -70,13 +70,22 @@ export async function setupDiscordSdk() {
             const tokenData = await tokenRes.json();
 
             if (tokenData.access_token) {
-                // Fetch user profile from Discord
-                const userRes = await fetch('https://discord.com/api/users/@me', {
-                    headers: { Authorization: `Bearer ${tokenData.access_token}` },
-                });
-                const userData = await userRes.json();
+                // If backend provided user data, use it directly (bypasses CORS issues)
+                let userData = tokenData.user;
 
-                if (userData.id) {
+                // Fallback to fetching from frontend if backend didn't provide it for some reason
+                if (!userData) {
+                    try {
+                        const userRes = await fetch('https://discord.com/api/users/@me', {
+                            headers: { Authorization: `Bearer ${tokenData.access_token}` },
+                        });
+                        userData = await userRes.json();
+                    } catch (err) {
+                        console.warn('Frontend fetch to Discord API failed (likely CORS):', err);
+                    }
+                }
+
+                if (userData && userData.id) {
                     const avatarUrl = userData.avatar
                         ? `https://cdn.discordapp.com/avatars/${userData.id}/${userData.avatar}.png?size=64`
                         : `https://cdn.discordapp.com/embed/avatars/${(BigInt(userData.id) >> 22n) % 6n}.png`;
