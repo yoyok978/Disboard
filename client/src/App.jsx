@@ -28,6 +28,7 @@ function Whiteboard({ roomId, user }) {
 
     const handleMount = useCallback((editor) => {
         editorRef.current = editor;
+        editor.updateInstanceState({ isGridMode: true });
     }, []);
 
     // Broadcast cursor in tldraw PAGE coordinates so it matches the canvas

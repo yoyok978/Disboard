@@ -101,7 +101,7 @@ export async function setupDiscordSdk() {
             }
         } catch (e) {
             console.error("Discord SDK Authorize/Token failed, using fallback:", e);
-            user = createFallbackUser(`auth-fail: ${e.message.substring(0, 10)}`);
+            user = createFallbackUser(`auth-fail: ${e.message}`);
         }
     }
 
@@ -118,7 +118,8 @@ export function createFallbackUser(reason = 'unknown') {
     return {
         id,
         username: `${reason}-${id}`,
-        globalName: `${reason.split('-')[0]} ${id}`,
+        // If it's an auth-fail, display the full reason so we can debug it on-screen.
+        globalName: reason.startsWith('auth-fail') ? reason : `${reason.split('-')[0]} ${id}`,
         avatarUrl: null, // Will use a colored circle fallback
         color: colors[Math.floor(Math.random() * colors.length)],
     };
