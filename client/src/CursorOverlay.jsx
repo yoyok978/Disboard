@@ -88,23 +88,6 @@ export default function CursorOverlay({ awareness, editorRef }) {
                         transform: `translate(${cursor.x}px, ${cursor.y}px)`,
                     }}
                 >
-                    <svg
-                        className="cursor-arrow"
-                        width="16"
-                        height="20"
-                        viewBox="0 0 16 20"
-                        fill="none"
-                        xmlns="http://www.w3.org/2000/svg"
-                    >
-                        <path
-                            d="M1 1L1 17.5L5.5 13L10.5 19L13.5 17L8.5 11L14.5 10L1 1Z"
-                            fill={cursor.color}
-                            stroke="white"
-                            strokeWidth="1.5"
-                            strokeLinejoin="round"
-                        />
-                    </svg>
-
                     <div
                         className="cursor-avatar"
                         style={{
