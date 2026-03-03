@@ -5,10 +5,13 @@ import { setupDiscordSdk } from './discord';
 import { useYjsStore } from './useYjsStore';
 
 function Whiteboard({ roomId }) {
-    // Connect to the same host but with ws/wss protocol for the proxy instead
-    const isSecure = window.location.protocol === 'https:';
-    const wsProtocol = isSecure ? 'wss:' : 'ws:';
-    const HOST_URL = import.meta.env.VITE_WEBSOCKET_URL || `${wsProtocol}//${window.location.host}/ws`;
+    // Determine the WebSocket URL based on the environment
+    const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+
+    // For local dev, use the Vite proxy. For production (Vercel), use the live Render URL.
+    const HOST_URL = isLocalhost
+        ? `ws://${window.location.host}/ws`
+        : 'wss://disboard-xb6e.onrender.com';
 
     const { store, status } = useYjsStore({ roomId, hostUrl: HOST_URL });
 
