@@ -53,32 +53,21 @@ export async function setupDiscordSdk() {
     if (discordSdk.channelId != null) {
         console.log("Running in channel:", discordSdk.channelId);
         try {
-            // Define a consistent redirect URI to use for both frontend and backend
-            const redirectUri = import.meta.env.VITE_DISCORD_REDIRECT_URI || 'http://127.0.0.1';
-
             const { code } = await discordSdk.commands.authorize({
                 client_id: import.meta.env.VITE_DISCORD_CLIENT_ID || 'dummy-client-id',
                 response_type: "code",
                 state: "",
                 prompt: "none",
                 scope: ["identify", "guilds"],
-                // 1. ADD THIS: Satisfies Discord's OAuth2 requirement
-                redirect_uri: redirectUri,
             });
 
-            // 2. UPDATE THIS: Pass the exact same redirect_uri to your backend
+            // Exchange the code for an access token via our server
             const tokenRes = await fetch('/api/token', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    code,
-                    redirect_uri: redirectUri
-                }),
+                body: JSON.stringify({ code }),
             });
-
             const tokenData = await tokenRes.json();
-
-            // ... the rest of your user profile fetching code remains exactly the same ...
 
             if (tokenData.access_token) {
                 // If backend provided user data, use it directly (bypasses CORS issues)

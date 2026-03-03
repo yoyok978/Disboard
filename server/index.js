@@ -30,7 +30,6 @@ app.post('/api/token', async (req, res) => {
                 client_secret: process.env.DISCORD_CLIENT_SECRET,
                 grant_type: 'authorization_code',
                 code,
-                redirect_uri: process.env.DISCORD_REDIRECT_URI || req.body.redirect_uri || 'http://127.0.0.1',
             }),
         });
         const data = await response.json();
