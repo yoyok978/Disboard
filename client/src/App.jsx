@@ -1,9 +1,10 @@
-import React, { useEffect, useState, useCallback, useRef } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { Tldraw } from 'tldraw';
 import 'tldraw/tldraw.css';
 import { setupDiscordSdk } from './discord';
 import { useYjsStore } from './useYjsStore';
 import CursorOverlay from './CursorOverlay';
+import UsersSidebar from './UsersSidebar';
 
 import { getAssetUrls } from '@tldraw/assets/selfHosted';
 
@@ -23,21 +24,33 @@ function Whiteboard({ roomId, user }) {
 
     const { store, status, provider } = useYjsStore({ roomId, hostUrl: HOST_URL, user });
 
-    // Broadcast cursor position via awareness
-    const handleMouseMove = useCallback((e) => {
+    // Use a document-level pointermove listener so we capture movement
+    // even when tldraw has pointer capture on its canvas.
+    useEffect(() => {
         if (!provider?.awareness) return;
-        const rect = containerRef.current?.getBoundingClientRect();
-        if (!rect) return;
-        provider.awareness.setLocalStateField('cursor', {
-            x: e.clientX - rect.left,
-            y: e.clientY - rect.top,
-        });
-    }, [provider]);
+        const container = containerRef.current;
+        if (!container) return;
 
-    // Clear cursor when mouse leaves the canvas
-    const handleMouseLeave = useCallback(() => {
-        if (!provider?.awareness) return;
-        provider.awareness.setLocalStateField('cursor', null);
+        const onPointerMove = (e) => {
+            const rect = container.getBoundingClientRect();
+            provider.awareness.setLocalStateField('cursor', {
+                x: e.clientX - rect.left,
+                y: e.clientY - rect.top,
+            });
+        };
+
+        const onPointerLeave = () => {
+            provider.awareness.setLocalStateField('cursor', null);
+        };
+
+        // Capture phase ensures we intercept before tldraw can stop propagation
+        document.addEventListener('pointermove', onPointerMove, true);
+        document.addEventListener('pointerleave', onPointerLeave, true);
+
+        return () => {
+            document.removeEventListener('pointermove', onPointerMove, true);
+            document.removeEventListener('pointerleave', onPointerLeave, true);
+        };
     }, [provider]);
 
     if (status === 'loading') {
@@ -47,17 +60,10 @@ function Whiteboard({ roomId, user }) {
     const assetUrls = getAssetUrls({ baseUrl: './tldraw-assets' });
 
     return (
-        <div
-            ref={containerRef}
-            style={{ position: 'fixed', inset: 0 }}
-            onMouseMove={handleMouseMove}
-            onMouseLeave={handleMouseLeave}
-        >
+        <div ref={containerRef} style={{ position: 'fixed', inset: 0 }}>
             <Tldraw store={store} assetUrls={assetUrls} />
-            <CursorOverlay
-                awareness={provider?.awareness}
-                userId={user?.id}
-            />
+            <CursorOverlay awareness={provider?.awareness} />
+            <UsersSidebar awareness={provider?.awareness} currentUser={user} />
         </div>
     );
 }

@@ -3,10 +3,8 @@ import React, { useEffect, useState, useRef } from 'react';
 /**
  * Renders remote users' cursors on top of the tldraw canvas.
  * Each cursor shows a small arrow + circular Discord profile picture.
- *
- * @param {{ awareness: import('y-protocols/awareness').Awareness, userId: string }} props
  */
-export default function CursorOverlay({ awareness, userId }) {
+export default function CursorOverlay({ awareness }) {
     const [cursors, setCursors] = useState([]);
     const rafRef = useRef(null);
     const pendingUpdate = useRef(false);
@@ -19,7 +17,6 @@ export default function CursorOverlay({ awareness, userId }) {
             const remoteCursors = [];
 
             states.forEach((state, clientId) => {
-                // Skip our own cursor
                 if (clientId === awareness.clientID) return;
                 if (!state.cursor || !state.user) return;
 
@@ -38,7 +35,6 @@ export default function CursorOverlay({ awareness, userId }) {
         };
 
         const onAwarenessChange = () => {
-            // Throttle updates to animation frames for smooth rendering
             if (!pendingUpdate.current) {
                 pendingUpdate.current = true;
                 rafRef.current = requestAnimationFrame(updateCursors);
@@ -46,15 +42,13 @@ export default function CursorOverlay({ awareness, userId }) {
         };
 
         awareness.on('change', onAwarenessChange);
-
-        // Initial load
         updateCursors();
 
         return () => {
             awareness.off('change', onAwarenessChange);
             if (rafRef.current) cancelAnimationFrame(rafRef.current);
         };
-    }, [awareness, userId]);
+    }, [awareness]);
 
     if (cursors.length === 0) return null;
 
