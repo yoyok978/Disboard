@@ -13,8 +13,10 @@ function Whiteboard({ roomId }) {
         window.location.hostname.endsWith('.trycloudflare.com');
 
     // For local dev/tunnel, use the Vite proxy. For production (Vercel), use the live Render URL.
+    // If the browser is on https (Cloudflare tunnel), use wss. If http (localhost), use ws.
+    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const HOST_URL = isLocalDevelopment
-        ? `wss://${window.location.host}/ws`
+        ? `${wsProtocol}//${window.location.host}/ws`
         : 'wss://disboard-xb6e.onrender.com';
 
     const { store, status } = useYjsStore({ roomId, hostUrl: HOST_URL });
