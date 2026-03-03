@@ -4,6 +4,8 @@ import 'tldraw/tldraw.css';
 import { setupDiscordSdk } from './discord';
 import { useYjsStore } from './useYjsStore';
 
+import { getAssetUrls } from '@tldraw/assets/selfHosted';
+
 function Whiteboard({ roomId }) {
     // Determine the WebSocket URL.
     // If we are developing locally (either on localhost OR via the trycloudflare.com tunnel),
@@ -27,9 +29,11 @@ function Whiteboard({ roomId }) {
         return <div style={{ color: 'white', padding: 20 }}>Connecting to Disboard Engine...</div>;
     }
 
+    const assetUrls = getAssetUrls({ baseUrl: './tldraw-assets' });
+
     return (
         <div style={{ position: 'fixed', inset: 0 }}>
-            <Tldraw store={store} />
+            <Tldraw store={store} assetUrls={assetUrls} />
         </div>
     );
 }

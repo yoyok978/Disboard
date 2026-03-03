@@ -5,15 +5,16 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "prebuild": "chmod +x node_modules/.bin/vite",
     "build": "vite build",
     "preview": "vite preview"
   },
   "dependencies": {
     "@discord/embedded-app-sdk": "^1.2.0",
+    "@tldraw/assets": "^4.4.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "tldraw": "^3.0.0",
+    "vite-plugin-static-copy": "^3.2.0",
     "y-websocket": "^2.0.0",
     "yjs": "^13.6.0"
   },
