@@ -26,20 +26,13 @@ export async function setupDiscordSdk() {
         };
     }
 
-    console.log("SDK Instance exists. Waiting for ready...");
-
-    const readyPromise = discordSdk.ready();
-    const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("SDK Ready Timeout")), 5000));
+    console.log("SDK Instance exists. Checking ready...");
 
     try {
-        await Promise.race([readyPromise, timeoutPromise]);
+        await discordSdk.ready();
         console.log("SDK is ready.");
     } catch (err) {
-        console.warn("SDK Failed to become ready (Timeout or error). Falling back to local mode:", err);
-        return {
-            roomId: 'local-browser-room',
-            user: createFallbackUser('sdk-timeout'),
-        };
+        console.warn("SDK Failed to become ready (Timeout or error). Proceeding anyway to see if channel info exists:", err);
     }
 
     let user = createFallbackUser('no-channel-id');
