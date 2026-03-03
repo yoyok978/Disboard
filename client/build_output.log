@@ -1,0 +1,19 @@
+
+> disboard-client@0.0.0 build
+> vite build
+
+[36mvite v5.4.21 [32mbuilding for production...[36m[39m
+transforming...
+[32mΓ£ô[39m 1209 modules transformed.
+rendering chunks...
+computing gzip size...
+[2mdist/[22m[32mindex.html                 [39m[1m[2m    0.41 kB[22m[1m[22m[2m Γöé gzip:   0.28 kB[22m
+[2mdist/[22m[35massets/index-BfxBfL-T.css  [39m[1m[2m   74.71 kB[22m[1m[22m[2m Γöé gzip:  14.15 kB[22m
+[2mdist/[22m[36massets/index-fY4TMooN.js   [39m[1m[33m1,904.65 kB[39m[22m[2m Γöé gzip: 587.26 kB[22m
+
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+[36m[vite-plugin-static-copy][39m [32mCopied 4 items.[39m
+[32mΓ£ô built in 4.47s[39m
