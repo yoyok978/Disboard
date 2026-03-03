@@ -1,9 +1,13 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { createTLStore, defaultShapeUtils } from 'tldraw'
 import * as Y from 'yjs'
 import { WebsocketProvider } from 'y-websocket'
 
-export function useYjsStore({ roomId, hostUrl }) {
+/**
+ * @param {{ roomId: string, hostUrl: string, user: object }} opts
+ * @returns {{ status: string, store?: object, provider?: WebsocketProvider }}
+ */
+export function useYjsStore({ roomId, hostUrl, user }) {
     const [storeWithStatus, setStoreWithStatus] = useState({ status: 'loading' })
 
     useEffect(() => {
@@ -12,6 +16,16 @@ export function useYjsStore({ roomId, hostUrl }) {
         const yMap = yDoc.getMap('tldraw')
 
         const wsProvider = new WebsocketProvider(hostUrl, roomId, yDoc)
+
+        // Set local awareness with user info
+        if (user) {
+            wsProvider.awareness.setLocalStateField('user', {
+                name: user.globalName || user.username,
+                avatarUrl: user.avatarUrl,
+                color: user.color || '#5865F2',
+                id: user.id,
+            })
+        }
 
         const store = createTLStore({ shapeUtils: defaultShapeUtils })
 
@@ -36,7 +50,7 @@ export function useYjsStore({ roomId, hostUrl }) {
                             Object.values(update.changes.updated).forEach(([_, record]) => yMap.set(record.id, record))
                             Object.keys(update.changes.removed).forEach((id) => yMap.delete(id))
                         })
-                    }, { scope: 'document' }) // only sync the document scope (shapes, assets), leave session and ui out
+                    }, { scope: 'document' })
                 )
 
                 // Yjs -> Tldraw
@@ -53,9 +67,9 @@ export function useYjsStore({ roomId, hostUrl }) {
                     })
                 })
 
-                setStoreWithStatus({ status: 'synced-remote', store })
+                setStoreWithStatus({ status: 'synced-remote', store, provider: wsProvider })
             } else if (event.status === 'disconnected') {
-                setStoreWithStatus({ status: 'synced-local', store }) // Fallback to local
+                setStoreWithStatus({ status: 'synced-local', store, provider: wsProvider })
             }
         })
 
