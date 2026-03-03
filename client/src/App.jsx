@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { Tldraw } from 'tldraw';
 import 'tldraw/tldraw.css';
-import { setupDiscordSdk } from './discord';
+import { setupDiscordSdk, createFallbackUser } from './discord';
 import { useYjsStore } from './useYjsStore';
 import CursorOverlay from './CursorOverlay';
 import UsersSidebar from './UsersSidebar';
@@ -81,7 +81,7 @@ function App() {
             .catch((err) => {
                 console.error("SDK Setup failed", err);
                 setRoomId('test-room');
-                setUser({ id: 'fallback', username: 'local', globalName: 'Local User', avatarUrl: null, color: '#5865F2' });
+                setUser(createFallbackUser());
             });
     }, []);
 

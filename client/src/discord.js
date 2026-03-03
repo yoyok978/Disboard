@@ -15,8 +15,11 @@ export const discordSdk = sdkInstance;
  * `user` contains { id, username, globalName, avatarUrl }.
  */
 export async function setupDiscordSdk() {
-    if (!discordSdk) {
-        console.log("No SDK instance found (likely not embedded). Returning local room fallback.");
+    // Check if we are running in an iframe
+    const inIframe = window.parent !== window;
+
+    if (!discordSdk || !inIframe) {
+        console.log("Not running in an embedded iframe (or SDK missing). Returning local room fallback.");
         return {
             roomId: 'local-browser-room',
             user: createFallbackUser(),
@@ -32,8 +35,11 @@ export async function setupDiscordSdk() {
         await Promise.race([readyPromise, timeoutPromise]);
         console.log("SDK is ready.");
     } catch (err) {
-        console.error("SDK Failed to become ready:", err);
-        throw err;
+        console.warn("SDK Failed to become ready (Timeout or error). Falling back to local mode:", err);
+        return {
+            roomId: 'local-browser-room',
+            user: createFallbackUser(),
+        };
     }
 
     let user = createFallbackUser();
@@ -91,7 +97,7 @@ export async function setupDiscordSdk() {
 }
 
 /** Generate a fallback user for local browser testing. */
-function createFallbackUser() {
+export function createFallbackUser() {
     const colors = ['#5865F2', '#EB459E', '#57F287', '#FEE75C', '#ED4245'];
     const id = Math.random().toString(36).substring(2, 10);
     return {
