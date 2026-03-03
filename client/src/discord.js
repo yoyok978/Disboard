@@ -22,7 +22,7 @@ export async function setupDiscordSdk() {
         console.log("Not running in an embedded iframe (or SDK missing). Returning local room fallback.");
         return {
             roomId: 'local-browser-room',
-            user: createFallbackUser(),
+            user: createFallbackUser('no-iframe'),
         };
     }
 
@@ -38,11 +38,11 @@ export async function setupDiscordSdk() {
         console.warn("SDK Failed to become ready (Timeout or error). Falling back to local mode:", err);
         return {
             roomId: 'local-browser-room',
-            user: createFallbackUser(),
+            user: createFallbackUser('sdk-timeout'),
         };
     }
 
-    let user = createFallbackUser();
+    let user = createFallbackUser('no-channel-id');
 
     // If running inside Discord, authorize and fetch user info
     if (discordSdk.channelId != null) {
@@ -87,6 +87,7 @@ export async function setupDiscordSdk() {
             }
         } catch (e) {
             console.error("Discord SDK Authorize/Token failed, using fallback:", e);
+            user = createFallbackUser(`auth-fail: ${e.message.substring(0, 10)}`);
         }
     }
 
@@ -97,13 +98,13 @@ export async function setupDiscordSdk() {
 }
 
 /** Generate a fallback user for local browser testing. */
-export function createFallbackUser() {
+export function createFallbackUser(reason = 'unknown') {
     const colors = ['#5865F2', '#EB459E', '#57F287', '#FEE75C', '#ED4245'];
-    const id = Math.random().toString(36).substring(2, 10);
+    const id = Math.random().toString(36).substring(2, 6);
     return {
         id,
-        username: `user-${id.slice(0, 4)}`,
-        globalName: `User ${id.slice(0, 4)}`,
+        username: `${reason}-${id}`,
+        globalName: `${reason.split('-')[0]} ${id}`,
         avatarUrl: null, // Will use a colored circle fallback
         color: colors[Math.floor(Math.random() * colors.length)],
     };
