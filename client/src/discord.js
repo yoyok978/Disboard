@@ -1,6 +1,7 @@
 import { DiscordSDK } from "@discord/embedded-app-sdk";
 
 const clientId = import.meta.env.VITE_DISCORD_CLIENT_ID;
+let sdkInstance = null;
 
 try {
     if (!clientId || clientId === 'dummy-client-id') {
