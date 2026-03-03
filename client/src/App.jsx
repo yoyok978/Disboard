@@ -13,13 +13,14 @@ function Whiteboard({ roomId, user }) {
     const editorRef = useRef(null);
 
     const isLocalDevelopment = window.location.hostname === 'localhost' ||
-        window.location.hostname === '127.0.0.1' ||
-        window.location.hostname.endsWith('.trycloudflare.com');
+        window.location.hostname === '127.0.0.1';
 
-    // When deployed to Vercel, the app is served statically, so Vite's proxy doesn't exist.
-    // Therefore, any production or Discord environment needs to point to the Render backend directly.
+    const isDiscord = window.location.hostname.endsWith('.discordsays.com');
     const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const HOST_URL = isLocalDevelopment
+
+    // If running inside Discord, we MUST use their secure proxy /ws which routes to our Render backend
+    // Otherwise we point directly to Render (e.g. when accessing from the raw Vercel URL)
+    const HOST_URL = (isLocalDevelopment || isDiscord)
         ? `${wsProtocol}//${window.location.host}/ws`
         : 'wss://disboard-xb6e.onrender.com';
 
