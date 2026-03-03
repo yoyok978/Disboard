@@ -12,10 +12,12 @@ function Whiteboard({ roomId }) {
         window.location.hostname === '127.0.0.1' ||
         window.location.hostname.endsWith('.trycloudflare.com');
 
+    const isDiscord = window.location.hostname.endsWith('.discordsays.com');
+
     // For local dev/tunnel, use the Vite proxy. For production (Vercel), use the live Render URL.
     // If the browser is on https (Cloudflare tunnel), use wss. If http (localhost), use ws.
     const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const HOST_URL = isLocalDevelopment
+    const HOST_URL = (isLocalDevelopment || isDiscord)
         ? `${wsProtocol}//${window.location.host}/ws`
         : 'wss://disboard-xb6e.onrender.com';
 
