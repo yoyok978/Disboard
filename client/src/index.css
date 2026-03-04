@@ -193,3 +193,8 @@ h2 {
 .users-sidebar-item.is-you .users-sidebar-avatar {
   box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.25);
 }
+
+/* Hide tldraw's default remote cursors since we use custom CursorOverlay */
+.tl-collaborator__cursor {
+  display: none !important;
+}
