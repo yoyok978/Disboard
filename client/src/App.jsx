@@ -12,6 +12,7 @@ import { getAssetUrls } from '@tldraw/assets/selfHosted';
 function Whiteboard({ roomId, user }) {
     const containerRef = useRef(null);
     const editorRef = useRef(null);
+    const [editorReady, setEditorReady] = useState(false);
 
     const isLocalDevelopment = window.location.hostname === 'localhost' ||
         window.location.hostname === '127.0.0.1';
@@ -30,6 +31,7 @@ function Whiteboard({ roomId, user }) {
     const handleMount = useCallback((editor) => {
         editorRef.current = editor;
         editor.updateInstanceState({ isGridMode: true });
+        setEditorReady(true);
     }, []);
 
     // Broadcast cursor in tldraw PAGE coordinates so it matches the canvas
@@ -57,15 +59,18 @@ function Whiteboard({ roomId, user }) {
 
     // ── Sync tldraw presence (laser scribbles, brush, selections) via Yjs awareness ──
     useEffect(() => {
+        if (!editorReady) return;
         const editor = editorRef.current;
         if (!editor || !provider?.awareness) return;
 
         // Track presence record IDs we've injected into the store for remote users
         const remotePresenceIds = new Map(); // awarenessClientId → presenceRecordId
+        let isApplyingRemote = false; // prevent feedback loops
 
         // Throttle awareness broadcasts (laser updates ~60fps, awareness needs ~10–20fps)
         let broadcastRaf = null;
         const broadcastPresence = () => {
+            if (isApplyingRemote) return; // skip changes caused by injecting remote presence
             if (broadcastRaf) return;
             broadcastRaf = requestAnimationFrame(() => {
                 broadcastRaf = null;
@@ -98,9 +103,9 @@ function Whiteboard({ roomId, user }) {
             });
         };
 
-        // Listen to ALL local changes (scribbles are in instance state = session scope)
+        // Listen to ALL changes (scribbles come from editor.run(), not user actions)
         const unsubStore = editor.store.listen(broadcastPresence, {
-            source: 'user',
+            source: 'all',
             scope: 'all',
         });
 
@@ -139,12 +144,15 @@ function Whiteboard({ roomId, user }) {
                         meta: {},
                     });
 
+                    isApplyingRemote = true;
                     editor.store.mergeRemoteChanges(() => {
                         editor.store.put([presenceRecord]);
                     });
+                    isApplyingRemote = false;
 
                     remotePresenceIds.set(clientId, presenceId);
                 } catch (e) {
+                    isApplyingRemote = false;
                     console.warn('[Disboard] Failed to create presence record:', e);
                 }
             });
@@ -180,7 +188,7 @@ function Whiteboard({ roomId, user }) {
             }
             remotePresenceIds.clear();
         };
-    }, [provider, editorRef.current]);
+    }, [provider, editorReady]);
 
     if (status === 'loading') {
         return <div style={{ color: 'white', padding: 20 }}>Connecting to Disboard Engine...</div>;
