@@ -2,8 +2,8 @@ import React, { useEffect, useState, useRef } from 'react';
 
 // ── Edge-indicator constants ────────────────────────────────
 const EDGE_MARGIN = 20;     // px inset from viewport edge
-const MIN_SCALE = 0.45;     // smallest the icon can shrink to (~14px)
-const MAX_DISTANCE = 2000;  // px – beyond this distance, icon stays at MIN_SCALE
+const MIN_SCALE = 0.60;     // smallest the icon can shrink to (~14px)
+const MAX_DISTANCE = 1000;  // px – beyond this distance, icon stays at MIN_SCALE
 
 /**
  * Renders remote users' cursors on top of the tldraw canvas.
