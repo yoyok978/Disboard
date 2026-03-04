@@ -99,6 +99,9 @@ function Whiteboard({ roomId, user }) {
         window.addEventListener('pointermove', onPointerMove, true);
         window.addEventListener('pointerup', onPointerUp, true);
 
+        // Tell React the editor is fully populated so dependent components (like CursorOverlay) can re-render
+        setEditorReady(true);
+
         // Cleanup function for when editor unmounts (though handled by strict container lifetime here usually)
         return () => {
             container.removeEventListener('pointerdown', onPointerDown, true);
@@ -106,7 +109,7 @@ function Whiteboard({ roomId, user }) {
             window.removeEventListener('pointermove', onPointerMove, true);
             window.removeEventListener('pointerup', onPointerUp, true);
         };
-    }, []);
+    }, [provider]); // Added provider to dependencies since it's used in onPointerMove
 
     // Broadcast cursor in tldraw PAGE coordinates so it matches the canvas
     useEffect(() => {
@@ -273,7 +276,7 @@ function Whiteboard({ roomId, user }) {
     return (
         <div ref={containerRef} style={{ position: 'fixed', inset: 0 }}>
             <Tldraw store={store} assetUrls={assetUrls} onMount={handleMount} />
-            <CursorOverlay awareness={provider?.awareness} editorRef={editorRef} />
+            <CursorOverlay awareness={provider?.awareness} editorRef={editorRef} editorReady={editorReady} />
             <UsersSidebar awareness={provider?.awareness} currentUser={user} />
         </div>
     );

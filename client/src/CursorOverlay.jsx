@@ -14,15 +14,16 @@ const MAX_DISTANCE = 1000;  // px – beyond this distance, icon stays at MIN_SC
  * clamped to the nearest edge and scaled down based on distance,
  * so the user always has a visual hint of where other participants are.
  */
-export default function CursorOverlay({ awareness, editorRef }) {
+export default function CursorOverlay({ awareness, editorRef, editorReady }) {
     const [cursors, setCursors] = useState([]);
     const rafRef = useRef(null);
 
     useEffect(() => {
-        if (!awareness) return;
+        // Exit early if the editor hasn't been mounted yet
+        if (!awareness || !editorReady) return;
 
         const computeCursors = () => {
-            const editor = editorRef?.current;
+            const editor = editorRef.current;
             const states = awareness.getStates();
             const remoteCursors = [];
 
@@ -95,21 +96,18 @@ export default function CursorOverlay({ awareness, editorRef }) {
 
         // Listen to tldraw's store for camera changes so cursors reposition
         // synchronously with the canvas — no one-frame lag.
-        const editor = editorRef?.current;
-        let unlistenStore;
-        if (editor) {
-            unlistenStore = editor.store.listen(
-                (entry) => {
-                    for (const [, [, to]] of Object.entries(entry.changes.updated)) {
-                        if (to.typeName === 'camera') {
-                            computeCursors();   // synchronous – keeps cursors in lockstep
-                            return;
-                        }
+        const editor = editorRef.current;
+        const unlistenStore = editor.store.listen(
+            (entry) => {
+                for (const [, [, to]] of Object.entries(entry.changes.updated)) {
+                    if (to.typeName === 'camera') {
+                        computeCursors();   // synchronous – keeps cursors in lockstep
+                        return;
                     }
-                },
-                { source: 'all' },
-            );
-        }
+                }
+            },
+            { source: 'all' },
+        );
 
         computeCursors();
 
@@ -118,7 +116,7 @@ export default function CursorOverlay({ awareness, editorRef }) {
             if (unlistenStore) unlistenStore();
             if (rafRef.current) cancelAnimationFrame(rafRef.current);
         };
-    }, [awareness, editorRef]);
+    }, [awareness, editorRef, editorReady]);
 
     if (cursors.length === 0) return null;
 
