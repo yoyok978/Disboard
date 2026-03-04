@@ -107,7 +107,7 @@ export default function CursorOverlay({ awareness, editorRef }) {
                         }
                     }
                 },
-                { source: 'all', scope: 'document' },
+                { source: 'all' },
             );
         }
 
