@@ -31,6 +31,70 @@ function Whiteboard({ roomId, user }) {
     const handleMount = useCallback((editor) => {
         editorRef.current = editor;
         editor.updateInstanceState({ isGridMode: true });
+
+        // ── Right-click pan: remap button 2 → hand tool while held ──
+        const container = editor.getContainer();
+        let previousToolId = null;
+        let isPanningWithRightClick = false;
+
+        const onPointerDown = (e) => {
+            if (e.button === 2) {
+                e.preventDefault();
+                e.stopPropagation();
+                isPanningWithRightClick = true;
+                previousToolId = editor.getCurrentToolId();
+                editor.setCurrentTool('hand');
+                // Re-dispatch as a left-click (button 0) so the hand tool picks it up
+                const synth = new PointerEvent('pointerdown', {
+                    ...e,
+                    button: 0,
+                    buttons: 1,
+                    clientX: e.clientX,
+                    clientY: e.clientY,
+                    pointerId: e.pointerId,
+                    pointerType: e.pointerType,
+                    bubbles: true,
+                    cancelable: true,
+                });
+                container.dispatchEvent(synth);
+            }
+        };
+
+        const onPointerUp = (e) => {
+            if (e.button === 2 && isPanningWithRightClick) {
+                e.preventDefault();
+                e.stopPropagation();
+                isPanningWithRightClick = false;
+                // Re-dispatch as a left-button release so the hand tool finishes
+                const synth = new PointerEvent('pointerup', {
+                    ...e,
+                    button: 0,
+                    buttons: 0,
+                    clientX: e.clientX,
+                    clientY: e.clientY,
+                    pointerId: e.pointerId,
+                    pointerType: e.pointerType,
+                    bubbles: true,
+                    cancelable: true,
+                });
+                container.dispatchEvent(synth);
+                // Restore the tool that was active before panning
+                if (previousToolId) {
+                    editor.setCurrentTool(previousToolId);
+                    previousToolId = null;
+                }
+            }
+        };
+
+        // Suppress native context menu on the canvas
+        const onContextMenu = (e) => {
+            e.preventDefault();
+        };
+
+        container.addEventListener('pointerdown', onPointerDown, true);
+        container.addEventListener('pointerup', onPointerUp, true);
+        container.addEventListener('contextmenu', onContextMenu, true);
+
         setEditorReady(true);
     }, []);
 
