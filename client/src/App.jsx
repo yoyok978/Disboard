@@ -32,31 +32,40 @@ function Whiteboard({ roomId, user }) {
         editorRef.current = editor;
         editor.updateInstanceState({ isGridMode: true });
 
-        // ── Right-click pan: remap button 2 → hand tool while held ──
+        // ── Right-click pan: manual camera control ──
         const container = editor.getContainer();
-        let previousToolId = null;
         let isPanningWithRightClick = false;
+        let lastX = 0;
+        let lastY = 0;
 
         const onPointerDown = (e) => {
             if (e.button === 2) {
                 e.preventDefault();
                 e.stopPropagation();
                 isPanningWithRightClick = true;
-                previousToolId = editor.getCurrentToolId();
-                editor.setCurrentTool('hand');
-                // Re-dispatch as a left-click (button 0) so the hand tool picks it up
-                const synth = new PointerEvent('pointerdown', {
-                    ...e,
-                    button: 0,
-                    buttons: 1,
-                    clientX: e.clientX,
-                    clientY: e.clientY,
-                    pointerId: e.pointerId,
-                    pointerType: e.pointerType,
-                    bubbles: true,
-                    cancelable: true,
+                lastX = e.clientX;
+                lastY = e.clientY;
+                container.style.cursor = 'grabbing';
+            }
+        };
+
+        const onPointerMove = (e) => {
+            if (isPanningWithRightClick) {
+                e.preventDefault();
+                e.stopPropagation();
+
+                const dx = e.clientX - lastX;
+                const dy = e.clientY - lastY;
+
+                const camera = editor.getCamera();
+                editor.setCamera({
+                    x: camera.x + dx / camera.z,
+                    y: camera.y + dy / camera.z,
+                    z: camera.z
                 });
-                container.dispatchEvent(synth);
+
+                lastX = e.clientX;
+                lastY = e.clientY;
             }
         };
 
@@ -65,24 +74,7 @@ function Whiteboard({ roomId, user }) {
                 e.preventDefault();
                 e.stopPropagation();
                 isPanningWithRightClick = false;
-                // Re-dispatch as a left-button release so the hand tool finishes
-                const synth = new PointerEvent('pointerup', {
-                    ...e,
-                    button: 0,
-                    buttons: 0,
-                    clientX: e.clientX,
-                    clientY: e.clientY,
-                    pointerId: e.pointerId,
-                    pointerType: e.pointerType,
-                    bubbles: true,
-                    cancelable: true,
-                });
-                container.dispatchEvent(synth);
-                // Restore the tool that was active before panning
-                if (previousToolId) {
-                    editor.setCurrentTool(previousToolId);
-                    previousToolId = null;
-                }
+                container.style.cursor = '';
             }
         };
 
@@ -91,11 +83,19 @@ function Whiteboard({ roomId, user }) {
             e.preventDefault();
         };
 
+        // Attach down/context menu to container, but move/up to window for smooth dragging outside
         container.addEventListener('pointerdown', onPointerDown, true);
-        container.addEventListener('pointerup', onPointerUp, true);
         container.addEventListener('contextmenu', onContextMenu, true);
+        window.addEventListener('pointermove', onPointerMove, true);
+        window.addEventListener('pointerup', onPointerUp, true);
 
-        setEditorReady(true);
+        // Cleanup function for when editor unmounts (though handled by strict container lifetime here usually)
+        return () => {
+            container.removeEventListener('pointerdown', onPointerDown, true);
+            container.removeEventListener('contextmenu', onContextMenu, true);
+            window.removeEventListener('pointermove', onPointerMove, true);
+            window.removeEventListener('pointerup', onPointerUp, true);
+        };
     }, []);
 
     // Broadcast cursor in tldraw PAGE coordinates so it matches the canvas
