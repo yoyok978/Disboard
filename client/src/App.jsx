@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
-import { Tldraw, InstancePresenceRecordType } from 'tldraw';
+import { Tldraw } from 'tldraw';
+import { InstancePresenceRecordType } from '@tldraw/tlschema';
 import 'tldraw/tldraw.css';
 import { setupDiscordSdk, createFallbackUser } from './discord';
 import { useYjsStore } from './useYjsStore';
@@ -57,41 +58,51 @@ function Whiteboard({ roomId, user }) {
     // ── Sync tldraw presence (laser scribbles, brush, selections) via Yjs awareness ──
     useEffect(() => {
         const editor = editorRef.current;
-        if (!editor || !provider?.awareness || !store) return;
+        if (!editor || !provider?.awareness) return;
 
         // Track presence record IDs we've injected into the store for remote users
         const remotePresenceIds = new Map(); // awarenessClientId → presenceRecordId
 
-        // 1. Broadcast local presence changes to awareness
-        //    Listens to scope: 'presence' which captures scribbles, brush, selections, etc.
-        const unsubStore = store.listen(
-            () => {
-                // Read the current local instance state to extract scribbles, brush, etc.
-                const instance = editor.getInstanceState();
-                if (!instance) return;
+        // Throttle awareness broadcasts (laser updates ~60fps, awareness needs ~10–20fps)
+        let broadcastRaf = null;
+        const broadcastPresence = () => {
+            if (broadcastRaf) return;
+            broadcastRaf = requestAnimationFrame(() => {
+                broadcastRaf = null;
+                try {
+                    const instance = editor.getInstanceState();
+                    if (!instance) return;
 
-                const pageState = editor.getCurrentPageState();
-                const camera = editor.getCamera();
-                const pointer = editor.inputs.currentPagePoint;
+                    const pageState = editor.getCurrentPageState();
+                    const camera = editor.getCamera();
+                    const pointer = editor.inputs.currentPagePoint;
 
-                provider.awareness.setLocalStateField('tldrawPresence', {
-                    scribbles: instance.scribbles ?? [],
-                    brush: instance.brush,
-                    cursor: {
-                        x: pointer?.x ?? 0,
-                        y: pointer?.y ?? 0,
-                        type: instance.cursor?.type ?? 'default',
-                        rotation: instance.cursor?.rotation ?? 0,
-                    },
-                    selectedShapeIds: pageState?.selectedShapeIds ?? [],
-                    currentPageId: editor.getCurrentPageId(),
-                    camera: camera ? { x: camera.x, y: camera.y, z: camera.z } : { x: 0, y: 0, z: 1 },
-                    screenBounds: instance.screenBounds,
-                    chatMessage: instance.chatMessage ?? '',
-                });
-            },
-            { source: 'all', scope: 'all' }
-        );
+                    provider.awareness.setLocalStateField('tldrawPresence', {
+                        scribbles: instance.scribbles ?? [],
+                        brush: instance.brush ?? null,
+                        cursor: {
+                            x: pointer?.x ?? 0,
+                            y: pointer?.y ?? 0,
+                            type: instance.cursor?.type ?? 'default',
+                            rotation: instance.cursor?.rotation ?? 0,
+                        },
+                        selectedShapeIds: pageState?.selectedShapeIds ?? [],
+                        currentPageId: editor.getCurrentPageId(),
+                        camera: camera ? { x: camera.x, y: camera.y, z: camera.z } : null,
+                        screenBounds: instance.screenBounds ?? null,
+                        chatMessage: instance.chatMessage ?? '',
+                    });
+                } catch (e) {
+                    // Editor may not be ready
+                }
+            });
+        };
+
+        // Listen to ALL local changes (scribbles are in instance state = session scope)
+        const unsubStore = editor.store.listen(broadcastPresence, {
+            source: 'user',
+            scope: 'all',
+        });
 
         // 2. Receive remote presence from awareness and inject into tldraw store
         const onAwarenessChange = () => {
@@ -109,29 +120,33 @@ function Whiteboard({ roomId, user }) {
                 // Create a stable presence record ID for this remote client
                 const presenceId = InstancePresenceRecordType.createId(`remote-${clientId}`);
 
-                const presenceRecord = InstancePresenceRecordType.create({
-                    id: presenceId,
-                    userId: state.user.id || `user-${clientId}`,
-                    userName: state.user.name || 'Anonymous',
-                    color: state.user.color || '#5865F2',
-                    currentPageId: p.currentPageId || editor.getCurrentPageId(),
-                    cursor: p.cursor || null,
-                    selectedShapeIds: p.selectedShapeIds || [],
-                    camera: p.camera || null,
-                    screenBounds: p.screenBounds || null,
-                    lastActivityTimestamp: Date.now(),
-                    chatMessage: p.chatMessage || '',
-                    brush: p.brush || null,
-                    scribbles: p.scribbles || [],
-                    followingUserId: null,
-                    meta: {},
-                });
+                try {
+                    const presenceRecord = InstancePresenceRecordType.create({
+                        id: presenceId,
+                        userId: state.user.id || `user-${clientId}`,
+                        userName: state.user.name || 'Anonymous',
+                        color: state.user.color || '#5865F2',
+                        currentPageId: p.currentPageId || editor.getCurrentPageId(),
+                        cursor: p.cursor || null,
+                        selectedShapeIds: p.selectedShapeIds || [],
+                        camera: p.camera || null,
+                        screenBounds: p.screenBounds || null,
+                        lastActivityTimestamp: Date.now(),
+                        chatMessage: p.chatMessage || '',
+                        brush: p.brush || null,
+                        scribbles: p.scribbles || [],
+                        followingUserId: null,
+                        meta: {},
+                    });
 
-                editor.store.mergeRemoteChanges(() => {
-                    editor.store.put([presenceRecord]);
-                });
+                    editor.store.mergeRemoteChanges(() => {
+                        editor.store.put([presenceRecord]);
+                    });
 
-                remotePresenceIds.set(clientId, presenceId);
+                    remotePresenceIds.set(clientId, presenceId);
+                } catch (e) {
+                    console.warn('[Disboard] Failed to create presence record:', e);
+                }
             });
 
             // Remove presence records for clients that have disconnected
@@ -153,6 +168,7 @@ function Whiteboard({ roomId, user }) {
 
         return () => {
             unsubStore();
+            if (broadcastRaf) cancelAnimationFrame(broadcastRaf);
             provider.awareness.off('change', onAwarenessChange);
             // Clean up all remote presence records
             for (const [, presenceId] of remotePresenceIds) {
@@ -164,7 +180,7 @@ function Whiteboard({ roomId, user }) {
             }
             remotePresenceIds.clear();
         };
-    }, [store, provider, editorRef.current]);
+    }, [provider, editorRef.current]);
 
     if (status === 'loading') {
         return <div style={{ color: 'white', padding: 20 }}>Connecting to Disboard Engine...</div>;
