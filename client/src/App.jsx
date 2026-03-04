@@ -209,7 +209,7 @@ function Whiteboard({ roomId, user }) {
                         userName: state.user.name || 'Anonymous',
                         color: state.user.color || '#5865F2',
                         currentPageId: p.currentPageId || editor.getCurrentPageId(),
-                        cursor: p.cursor || null,
+                        cursor: null,
                         selectedShapeIds: p.selectedShapeIds || [],
                         camera: p.camera || null,
                         screenBounds: p.screenBounds || null,
