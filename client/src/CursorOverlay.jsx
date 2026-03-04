@@ -84,6 +84,7 @@ export default function CursorOverlay({ awareness, editorRef }) {
             setCursors(remoteCursors);
         };
 
+        // Batched update for awareness changes (network-driven, RAF is fine)
         const scheduleUpdate = () => {
             if (rafRef.current) cancelAnimationFrame(rafRef.current);
             rafRef.current = requestAnimationFrame(computeCursors);
@@ -92,19 +93,29 @@ export default function CursorOverlay({ awareness, editorRef }) {
         // Re-compute when awareness changes (remote cursor moved)
         awareness.on('change', scheduleUpdate);
 
-        // Also re-compute on local camera changes (pan/zoom) so remote cursors
-        // reposition on screen even when they aren't moving
-        const onPointerMove = () => scheduleUpdate();
-        const onWheel = () => scheduleUpdate();
-        document.addEventListener('pointermove', onPointerMove, true);
-        document.addEventListener('wheel', onWheel, true);
+        // Listen to tldraw's store for camera changes so cursors reposition
+        // synchronously with the canvas — no one-frame lag.
+        const editor = editorRef?.current;
+        let unlistenStore;
+        if (editor) {
+            unlistenStore = editor.store.listen(
+                (entry) => {
+                    for (const [, [, to]] of Object.entries(entry.changes.updated)) {
+                        if (to.typeName === 'camera') {
+                            computeCursors();   // synchronous – keeps cursors in lockstep
+                            return;
+                        }
+                    }
+                },
+                { source: 'all', scope: 'document' },
+            );
+        }
 
         computeCursors();
 
         return () => {
             awareness.off('change', scheduleUpdate);
-            document.removeEventListener('pointermove', onPointerMove, true);
-            document.removeEventListener('wheel', onWheel, true);
+            if (unlistenStore) unlistenStore();
             if (rafRef.current) cancelAnimationFrame(rafRef.current);
         };
     }, [awareness, editorRef]);
