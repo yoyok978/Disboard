@@ -198,3 +198,8 @@ h2 {
 .tl-collaborator__cursor {
   display: none !important;
 }
+
+/* Hide tldraw's default off-screen cursor edge indicator */
+.tl-user-indicator__hint {
+  display: none !important;
+}
