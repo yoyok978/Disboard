@@ -66,6 +66,16 @@ function Whiteboard({ roomId, user }) {
 
                 lastX = e.clientX;
                 lastY = e.clientY;
+
+                // When panning, the screen pointer doesn't change but the page coordinate does.
+                // We need to manually update the cursor position for other users.
+                if (provider?.awareness) {
+                    const pagePoint = editor.screenToPage({ x: e.clientX, y: e.clientY });
+                    provider.awareness.setLocalStateField('cursor', {
+                        x: pagePoint.x,
+                        y: pagePoint.y,
+                    });
+                }
             }
         };
 
