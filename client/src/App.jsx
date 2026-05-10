@@ -93,9 +93,35 @@ function Whiteboard({ roomId, user }) {
             e.preventDefault();
         };
 
+        // ── Scroll-to-zoom: override default scroll panning ──
+        const ZOOM_SPEED = 0.005;
+        const MIN_ZOOM = 0.1;
+        const MAX_ZOOM = 8;
+        const onWheel = (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+
+            const camera = editor.getCamera();
+            const delta = -e.deltaY * ZOOM_SPEED;
+            const newZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, camera.z * (1 + delta)));
+
+            // Zoom toward the cursor position
+            const { left, top } = container.getBoundingClientRect();
+            const cx = e.clientX - left;
+            const cy = e.clientY - top;
+
+            const scaleFactor = newZoom / camera.z;
+            editor.setCamera({
+                x: cx / newZoom - (cx / camera.z - camera.x),
+                y: cy / newZoom - (cy / camera.z - camera.y),
+                z: newZoom,
+            });
+        };
+
         // Attach down/context menu to container, but move/up to window for smooth dragging outside
         container.addEventListener('pointerdown', onPointerDown, true);
         container.addEventListener('contextmenu', onContextMenu, true);
+        container.addEventListener('wheel', onWheel, { passive: false, capture: true });
         window.addEventListener('pointermove', onPointerMove, true);
         window.addEventListener('pointerup', onPointerUp, true);
 
@@ -106,6 +132,7 @@ function Whiteboard({ roomId, user }) {
         return () => {
             container.removeEventListener('pointerdown', onPointerDown, true);
             container.removeEventListener('contextmenu', onContextMenu, true);
+            container.removeEventListener('wheel', onWheel, true);
             window.removeEventListener('pointermove', onPointerMove, true);
             window.removeEventListener('pointerup', onPointerUp, true);
         };
