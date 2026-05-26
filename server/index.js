@@ -86,12 +86,13 @@ function getDoc(docName) {
             doc.conns.forEach((_, c) => { if (c !== conn) c.send(buff); });
         });
 
-        doc.on("update", (update) => {
+        doc.on("update", (update, origin) => {
             const encoder = encoding.createEncoder();
             encoding.writeVarUint(encoder, 0);
             writeUpdate(encoder, update);
             const buff = encoding.toUint8Array(encoder);
-            doc.conns.forEach((_, c) => c.send(buff));
+            // Don't echo doc updates back to the sender – saves bandwidth
+            doc.conns.forEach((_, c) => { if (c !== origin) c.send(buff); });
         });
 
         docs.set(docName, doc);
@@ -99,9 +100,29 @@ function getDoc(docName) {
     return doc;
 }
 
-const wss = new WebSocketServer({ server });
+const wss = new WebSocketServer({
+    server,
+    perMessageDeflate: {
+        zlibDeflateOptions: { chunkSize: 1024, memLevel: 7, level: 3 },
+        zlibInflateOptions: { chunkSize: 10 * 1024 },
+        threshold: 128, // only compress messages > 128 bytes
+    },
+});
+
+// Heartbeat – detect and clean up stale connections (e.g. iPad sleep, WiFi drop)
+const HEARTBEAT_INTERVAL = 30000; // 30s
+const heartbeat = setInterval(() => {
+    wss.clients.forEach((ws) => {
+        if (ws.isAlive === false) return ws.terminate();
+        ws.isAlive = false;
+        ws.ping();
+    });
+}, HEARTBEAT_INTERVAL);
+wss.on('close', () => clearInterval(heartbeat));
 
 wss.on('connection', (conn, req) => {
+    conn.isAlive = true;
+    conn.on('pong', () => { conn.isAlive = true; });
     const docName = req.url.slice(1).split('?')[0] || 'lobby';
     console.log(`[Disboard] Client connected to room: ${docName}`);
     const doc = getDoc(docName);
@@ -114,7 +135,7 @@ wss.on('connection', (conn, req) => {
             const msgType = decoding.readVarUint(decoder);
             if (msgType === 0) {
                 encoding.writeVarUint(encoder, 0);
-                readSyncMessage(decoder, encoder, doc, null);
+                readSyncMessage(decoder, encoder, doc, conn);
                 if (encoding.length(encoder) > 1) {
                     conn.send(encoding.toUint8Array(encoder));
                 }
@@ -144,6 +165,7 @@ wss.on('connection', (conn, req) => {
     conn.on('close', () => {
         doc.conns.delete(conn);
         if (doc.conns.size === 0) {
+            doc.destroy();
             docs.delete(docName);
         }
         console.log(`[Disboard] Client disconnected from room: ${docName}`);

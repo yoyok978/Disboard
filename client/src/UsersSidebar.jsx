@@ -35,10 +35,16 @@ export default function UsersSidebar({ awareness, currentUser }) {
             setUsers(connectedUsers);
         };
 
-        awareness.on('change', updateUsers);
+        // Only recompute when clients join or leave, not on every cursor/presence update
+        const onAwarenessChange = ({ added, removed }) => {
+            if (added.length > 0 || removed.length > 0) {
+                updateUsers();
+            }
+        };
+        awareness.on('change', onAwarenessChange);
         updateUsers();
 
-        return () => awareness.off('change', updateUsers);
+        return () => awareness.off('change', onAwarenessChange);
     }, [awareness]);
 
     return (
