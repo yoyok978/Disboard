@@ -203,3 +203,61 @@ h2 {
 .tl-user-indicator__hint {
   display: none !important;
 }
+
+/* ─── Apple Pencil / Stylus Quick-Toggle FAB ─────────────── */
+
+.pencil-fab {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 10001;
+
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(30, 31, 44, 0.85);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  box-shadow:
+    0 4px 20px rgba(0, 0, 0, 0.4),
+    0 0 0 1px rgba(88, 101, 242, 0.15) inset;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255, 255, 255, 0.85);
+  cursor: pointer;
+
+  /* Hidden by default — slides in when pen is detected */
+  opacity: 0;
+  transform: translateY(20px) scale(0.85);
+  pointer-events: none;
+  transition:
+    opacity 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+    transform 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+    background 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.pencil-fab--visible {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  pointer-events: auto;
+}
+
+.pencil-fab:hover {
+  background: rgba(88, 101, 242, 0.35);
+  box-shadow:
+    0 6px 28px rgba(88, 101, 242, 0.25),
+    0 0 0 1px rgba(88, 101, 242, 0.3) inset;
+  color: #fff;
+}
+
+.pencil-fab:active {
+  transform: translateY(0) scale(0.92);
+}
+
+.pencil-fab svg {
+  flex-shrink: 0;
+}

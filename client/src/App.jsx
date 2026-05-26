@@ -6,6 +6,7 @@ import { setupDiscordSdk, createFallbackUser } from './discord';
 import { useYjsStore } from './useYjsStore';
 import CursorOverlay from './CursorOverlay';
 import UsersSidebar from './UsersSidebar';
+import ApplePencilSupport from './ApplePencilSupport';
 
 import { getAssetUrls } from '@tldraw/assets/selfHosted';
 
@@ -355,6 +356,7 @@ function Whiteboard({ roomId, user }) {
             <Tldraw store={store} assetUrls={assetUrls} onMount={handleMount} shapeUtils={[CustomArrowShapeUtil]} />
             <CursorOverlay awareness={provider?.awareness} editorRef={editorRef} editorReady={editorReady} />
             <UsersSidebar awareness={provider?.awareness} currentUser={user} />
+            <ApplePencilSupport editorRef={editorRef} editorReady={editorReady} />
         </div>
     );
 }
