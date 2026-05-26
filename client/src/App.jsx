@@ -149,7 +149,7 @@ function Whiteboard({ roomId, user }) {
             if (!editor) return;
 
             const now = performance.now();
-            if (now - lastCursorBroadcast < 66) return; // ~15fps cap – frees bandwidth for shape data
+            if (now - lastCursorBroadcast < 50) return; // ~20fps cap
 
             if (cursorRaf) cancelAnimationFrame(cursorRaf);
             cursorRaf = requestAnimationFrame(() => {
@@ -184,7 +184,7 @@ function Whiteboard({ roomId, user }) {
         // ── Throttled presence broadcast ──
         // Time-based throttle ensures we don't flood awareness with updates.
         // Laser scribbles update at 60fps internally, but we only need ~20fps over the wire.
-        const BROADCAST_INTERVAL = 100; // ms → ~10fps – frees bandwidth for shape data
+        const BROADCAST_INTERVAL = 60; // ms → ~16fps
         let lastBroadcastTime = 0;
         let broadcastTimer = null;
 
