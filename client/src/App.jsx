@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
-import { Tldraw } from 'tldraw';
+import { Tldraw, ArrowShapeUtil } from 'tldraw';
 import { InstancePresenceRecordType } from '@tldraw/tlschema';
 import 'tldraw/tldraw.css';
 import { setupDiscordSdk, createFallbackUser } from './discord';
@@ -8,6 +8,13 @@ import CursorOverlay from './CursorOverlay';
 import UsersSidebar from './UsersSidebar';
 
 import { getAssetUrls } from '@tldraw/assets/selfHosted';
+
+// Disable arrow center-snapping so the arrow starts where you click,
+// not at the center of the shape underneath.
+const CustomArrowShapeUtil = ArrowShapeUtil.configure({
+    arcArrowCenterSnapDistance: 0,
+    elbowArrowCenterSnapDistance: 0,
+});
 
 function Whiteboard({ roomId, user }) {
     const containerRef = useRef(null);
@@ -139,18 +146,29 @@ function Whiteboard({ roomId, user }) {
     }, [provider]); // Added provider to dependencies since it's used in onPointerMove
 
     // Broadcast cursor in tldraw PAGE coordinates so it matches the canvas
+    // Throttled to ~30fps to avoid saturating the WebSocket with awareness updates
     useEffect(() => {
         if (!provider?.awareness) return;
+
+        let lastCursorBroadcast = 0;
+        let cursorRaf = null;
 
         const onPointerMove = (e) => {
             const editor = editorRef.current;
             if (!editor) return;
 
-            // Use tldraw's screenToPage to convert viewport pixels → canvas coords
-            const pagePoint = editor.screenToPage({ x: e.clientX, y: e.clientY });
-            provider.awareness.setLocalStateField('cursor', {
-                x: pagePoint.x,
-                y: pagePoint.y,
+            const now = performance.now();
+            if (now - lastCursorBroadcast < 33) return; // ~30fps cap
+
+            if (cursorRaf) cancelAnimationFrame(cursorRaf);
+            cursorRaf = requestAnimationFrame(() => {
+                cursorRaf = null;
+                lastCursorBroadcast = performance.now();
+                const pagePoint = editor.screenToPage({ x: e.clientX, y: e.clientY });
+                provider.awareness.setLocalStateField('cursor', {
+                    x: pagePoint.x,
+                    y: pagePoint.y,
+                });
             });
         };
 
@@ -158,6 +176,7 @@ function Whiteboard({ roomId, user }) {
 
         return () => {
             document.removeEventListener('pointermove', onPointerMove, true);
+            if (cursorRaf) cancelAnimationFrame(cursorRaf);
         };
     }, [provider]);
 
@@ -171,40 +190,73 @@ function Whiteboard({ roomId, user }) {
         const remotePresenceIds = new Map(); // awarenessClientId → presenceRecordId
         let isApplyingRemote = false; // prevent feedback loops
 
-        // Throttle awareness broadcasts (laser updates ~60fps, awareness needs ~10–20fps)
-        let broadcastRaf = null;
-        const broadcastPresence = () => {
-            if (isApplyingRemote) return; // skip changes caused by injecting remote presence
-            if (broadcastRaf) return;
-            broadcastRaf = requestAnimationFrame(() => {
-                broadcastRaf = null;
-                try {
-                    const instance = editor.getInstanceState();
-                    if (!instance) return;
+        // ── Throttled presence broadcast ──
+        // Time-based throttle ensures we don't flood awareness with updates.
+        // Laser scribbles update at 60fps internally, but we only need ~20fps over the wire.
+        const BROADCAST_INTERVAL = 50; // ms → ~20fps
+        let lastBroadcastTime = 0;
+        let broadcastTimer = null;
 
-                    const pageState = editor.getCurrentPageState();
-                    const camera = editor.getCamera();
-                    const pointer = editor.inputs.currentPagePoint;
+        const doBroadcast = () => {
+            broadcastTimer = null;
+            lastBroadcastTime = performance.now();
+            try {
+                const instance = editor.getInstanceState();
+                if (!instance) return;
 
-                    provider.awareness.setLocalStateField('tldrawPresence', {
-                        scribbles: instance.scribbles ?? [],
-                        brush: instance.brush ?? null,
-                        cursor: {
-                            x: pointer?.x ?? 0,
-                            y: pointer?.y ?? 0,
-                            type: instance.cursor?.type ?? 'default',
-                            rotation: instance.cursor?.rotation ?? 0,
-                        },
-                        selectedShapeIds: pageState?.selectedShapeIds ?? [],
-                        currentPageId: editor.getCurrentPageId(),
-                        camera: camera ? { x: camera.x, y: camera.y, z: camera.z } : null,
-                        screenBounds: instance.screenBounds ?? null,
-                        chatMessage: instance.chatMessage ?? '',
-                    });
-                } catch (e) {
-                    // Editor may not be ready
+                const pageState = editor.getCurrentPageState();
+                const camera = editor.getCamera();
+                const pointer = editor.inputs.currentPagePoint;
+
+                provider.awareness.setLocalStateField('tldrawPresence', {
+                    scribbles: instance.scribbles ?? [],
+                    brush: instance.brush ?? null,
+                    cursor: {
+                        x: pointer?.x ?? 0,
+                        y: pointer?.y ?? 0,
+                        type: instance.cursor?.type ?? 'default',
+                        rotation: instance.cursor?.rotation ?? 0,
+                    },
+                    selectedShapeIds: pageState?.selectedShapeIds ?? [],
+                    currentPageId: editor.getCurrentPageId(),
+                    camera: camera ? { x: camera.x, y: camera.y, z: camera.z } : null,
+                    screenBounds: instance.screenBounds ?? null,
+                    chatMessage: instance.chatMessage ?? '',
+                });
+            } catch (e) {
+                // Editor may not be ready
+            }
+        };
+
+        const broadcastPresence = (entry) => {
+            // Skip changes that come from injecting remote presence records
+            if (isApplyingRemote) return;
+
+            // Quick check: if every changed record is a remote presence record, skip.
+            // This prevents the echo loop where receiving awareness → put presence → triggers listen → broadcasts again.
+            if (entry) {
+                const allUpdated = Object.values(entry.changes.updated);
+                const allAdded = Object.values(entry.changes.added);
+                const allRemoved = Object.keys(entry.changes.removed);
+                const allKeys = [
+                    ...allAdded.map(r => r.id),
+                    ...allUpdated.map(([, r]) => r.id),
+                    ...allRemoved,
+                ];
+                if (allKeys.length > 0 && allKeys.every(id => typeof id === 'string' && id.includes('remote-'))) {
+                    return; // only remote presence changed, don't echo
                 }
-            });
+            }
+
+            const now = performance.now();
+            const elapsed = now - lastBroadcastTime;
+
+            if (elapsed >= BROADCAST_INTERVAL) {
+                doBroadcast();
+            } else if (!broadcastTimer) {
+                // Schedule for the remaining time
+                broadcastTimer = setTimeout(doBroadcast, BROADCAST_INTERVAL - elapsed);
+            }
         };
 
         // Listen to ALL changes (scribbles come from editor.run(), not user actions)
@@ -214,10 +266,14 @@ function Whiteboard({ roomId, user }) {
         });
 
         // 2. Receive remote presence from awareness and inject into tldraw store
+        //    All puts are batched into a single mergeRemoteChanges call to avoid
+        //    N separate store events for N users.
         const onAwarenessChange = () => {
             const states = provider.awareness.getStates();
             const currentClientId = provider.awareness.clientID;
             const seenClientIds = new Set();
+            const recordsToPut = [];
+            const recordsToRemove = [];
 
             states.forEach((state, clientId) => {
                 if (clientId === currentClientId) return;
@@ -248,30 +304,33 @@ function Whiteboard({ roomId, user }) {
                         meta: {},
                     });
 
-                    isApplyingRemote = true;
-                    editor.store.mergeRemoteChanges(() => {
-                        editor.store.put([presenceRecord]);
-                    });
-                    isApplyingRemote = false;
-
+                    recordsToPut.push(presenceRecord);
                     remotePresenceIds.set(clientId, presenceId);
                 } catch (e) {
-                    isApplyingRemote = false;
                     console.warn('[Disboard] Failed to create presence record:', e);
                 }
             });
 
-            // Remove presence records for clients that have disconnected
+            // Collect presence records for disconnected clients
             for (const [clientId, presenceId] of remotePresenceIds) {
                 if (!seenClientIds.has(clientId)) {
-                    try {
-                        editor.store.mergeRemoteChanges(() => {
-                            editor.store.remove([presenceId]);
-                        });
-                    } catch (e) {
-                        // Record may already be gone
-                    }
+                    recordsToRemove.push(presenceId);
                     remotePresenceIds.delete(clientId);
+                }
+            }
+
+            // Single batched store update for all remote presence changes
+            if (recordsToPut.length > 0 || recordsToRemove.length > 0) {
+                isApplyingRemote = true;
+                try {
+                    editor.store.mergeRemoteChanges(() => {
+                        if (recordsToPut.length > 0) editor.store.put(recordsToPut);
+                        if (recordsToRemove.length > 0) editor.store.remove(recordsToRemove);
+                    });
+                } catch (e) {
+                    console.warn('[Disboard] Failed to batch update presence:', e);
+                } finally {
+                    isApplyingRemote = false;
                 }
             }
         };
@@ -280,13 +339,14 @@ function Whiteboard({ roomId, user }) {
 
         return () => {
             unsubStore();
-            if (broadcastRaf) cancelAnimationFrame(broadcastRaf);
+            if (broadcastTimer) clearTimeout(broadcastTimer);
             provider.awareness.off('change', onAwarenessChange);
             // Clean up all remote presence records
-            for (const [, presenceId] of remotePresenceIds) {
+            const idsToRemove = Array.from(remotePresenceIds.values());
+            if (idsToRemove.length > 0) {
                 try {
                     editor.store.mergeRemoteChanges(() => {
-                        editor.store.remove([presenceId]);
+                        editor.store.remove(idsToRemove);
                     });
                 } catch (e) { /* ignore */ }
             }
@@ -302,7 +362,7 @@ function Whiteboard({ roomId, user }) {
 
     return (
         <div ref={containerRef} style={{ position: 'fixed', inset: 0 }}>
-            <Tldraw store={store} assetUrls={assetUrls} onMount={handleMount} />
+            <Tldraw store={store} assetUrls={assetUrls} onMount={handleMount} shapeUtils={[CustomArrowShapeUtil]} />
             <CursorOverlay awareness={provider?.awareness} editorRef={editorRef} editorReady={editorReady} />
             <UsersSidebar awareness={provider?.awareness} currentUser={user} />
         </div>

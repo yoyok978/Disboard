@@ -82,7 +82,8 @@ function getDoc(docName) {
             encoding.writeVarUint(encoder, 1);
             encoding.writeVarUint8Array(encoder, encodeAwarenessUpdate(doc.awareness, changedClients));
             const buff = encoding.toUint8Array(encoder);
-            doc.conns.forEach((_, c) => c.send(buff));
+            // Don't echo awareness back to the sender – saves bandwidth & avoids feedback loops
+            doc.conns.forEach((_, c) => { if (c !== conn) c.send(buff); });
         });
 
         doc.on("update", (update) => {
