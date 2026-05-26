@@ -73,6 +73,16 @@ function Whiteboard({ roomId, user }) {
 
                 lastX = e.clientX;
                 lastY = e.clientY;
+
+                // When panning, the screen pointer doesn't change but the page coordinate does.
+                // We need to manually update the cursor position for other users.
+                if (provider?.awareness) {
+                    const pagePoint = editor.screenToPage({ x: e.clientX, y: e.clientY });
+                    provider.awareness.setLocalStateField('cursor', {
+                        x: pagePoint.x,
+                        y: pagePoint.y,
+                    });
+                }
             }
         };
 
@@ -148,7 +158,7 @@ function Whiteboard({ roomId, user }) {
             if (!editor) return;
 
             const now = performance.now();
-            if (now - lastCursorBroadcast < 66) return; // ~15fps cap – frees bandwidth for shape data
+            if (now - lastCursorBroadcast < 33) return; // ~30fps cap
 
             if (cursorRaf) cancelAnimationFrame(cursorRaf);
             cursorRaf = requestAnimationFrame(() => {
@@ -183,7 +193,7 @@ function Whiteboard({ roomId, user }) {
         // ── Throttled presence broadcast ──
         // Time-based throttle ensures we don't flood awareness with updates.
         // Laser scribbles update at 60fps internally, but we only need ~20fps over the wire.
-        const BROADCAST_INTERVAL = 100; // ms → ~10fps – frees bandwidth for shape data
+        const BROADCAST_INTERVAL = 50; // ms → ~20fps
         let lastBroadcastTime = 0;
         let broadcastTimer = null;
 

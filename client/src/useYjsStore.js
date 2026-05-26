@@ -16,11 +16,6 @@ export function useYjsStore({ roomId, hostUrl, user }) {
         const yMap = yDoc.getMap('tldraw')
 
         const wsProvider = new WebsocketProvider(hostUrl, roomId, yDoc)
-        // Ensure binary transport – avoids blob→arraybuffer conversion on iPad Safari
-        if (wsProvider.ws) wsProvider.ws.binaryType = 'arraybuffer'
-        wsProvider.on('status', () => {
-            if (wsProvider.ws) wsProvider.ws.binaryType = 'arraybuffer'
-        })
 
         // Set local awareness with user info
         if (user) {
@@ -46,37 +41,15 @@ export function useYjsStore({ roomId, hostUrl, user }) {
                     store.mergeRemoteChanges(() => store.put(records))
                 }
 
-                // Tldraw -> Yjs (batched to reduce WebSocket messages)
-                let pendingAdds = {}
-                let pendingUpdates = {}
-                let pendingRemoves = {}
-                let flushTimer = null
-                const FLUSH_INTERVAL = 50 // ms – well below perception threshold
-
-                const flushToYjs = () => {
-                    flushTimer = null
-                    const adds = pendingAdds
-                    const updates = pendingUpdates
-                    const removes = pendingRemoves
-                    pendingAdds = {}
-                    pendingUpdates = {}
-                    pendingRemoves = {}
-                    const hasWork = Object.keys(adds).length || Object.keys(updates).length || Object.keys(removes).length
-                    if (!hasWork) return
-                    yDoc.transact(() => {
-                        for (const record of Object.values(adds)) yMap.set(record.id, record)
-                        for (const record of Object.values(updates)) yMap.set(record.id, record)
-                        for (const id of Object.keys(removes)) yMap.delete(id)
-                    })
-                }
-
+                // Tldraw -> Yjs
                 unsubs.push(
                     store.listen((update) => {
                         if (update.source !== 'user') return
-                        Object.values(update.changes.added).forEach((r) => { pendingAdds[r.id] = r })
-                        Object.values(update.changes.updated).forEach(([_, r]) => { pendingUpdates[r.id] = r })
-                        Object.keys(update.changes.removed).forEach((id) => { pendingRemoves[id] = true })
-                        if (!flushTimer) flushTimer = setTimeout(flushToYjs, FLUSH_INTERVAL)
+                        yDoc.transact(() => {
+                            Object.values(update.changes.added).forEach((record) => yMap.set(record.id, record))
+                            Object.values(update.changes.updated).forEach(([_, record]) => yMap.set(record.id, record))
+                            Object.keys(update.changes.removed).forEach((id) => yMap.delete(id))
+                        })
                     }, { scope: 'document' })
                 )
 
@@ -102,7 +75,6 @@ export function useYjsStore({ roomId, hostUrl, user }) {
 
         return () => {
             unsubs.forEach((fn) => fn())
-            if (flushTimer) { clearTimeout(flushTimer); flushToYjs() }
             wsProvider.disconnect()
             yDoc.destroy()
         }
