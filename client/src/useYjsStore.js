@@ -46,14 +46,15 @@ export function useYjsStore({ roomId, hostUrl, user }) {
                     store.mergeRemoteChanges(() => store.put(records))
                 }
 
-                // Tldraw -> Yjs (batched per-frame to reduce WebSocket messages)
+                // Tldraw -> Yjs (batched to reduce WebSocket messages)
                 let pendingAdds = {}
                 let pendingUpdates = {}
                 let pendingRemoves = {}
-                let flushRaf = null
+                let flushTimer = null
+                const FLUSH_INTERVAL = 50 // ms – well below perception threshold
 
                 const flushToYjs = () => {
-                    flushRaf = null
+                    flushTimer = null
                     const adds = pendingAdds
                     const updates = pendingUpdates
                     const removes = pendingRemoves
@@ -75,7 +76,7 @@ export function useYjsStore({ roomId, hostUrl, user }) {
                         Object.values(update.changes.added).forEach((r) => { pendingAdds[r.id] = r })
                         Object.values(update.changes.updated).forEach(([_, r]) => { pendingUpdates[r.id] = r })
                         Object.keys(update.changes.removed).forEach((id) => { pendingRemoves[id] = true })
-                        if (!flushRaf) flushRaf = requestAnimationFrame(flushToYjs)
+                        if (!flushTimer) flushTimer = setTimeout(flushToYjs, FLUSH_INTERVAL)
                     }, { scope: 'document' })
                 )
 
@@ -101,7 +102,7 @@ export function useYjsStore({ roomId, hostUrl, user }) {
 
         return () => {
             unsubs.forEach((fn) => fn())
-            if (flushRaf) { cancelAnimationFrame(flushRaf); flushToYjs() }
+            if (flushTimer) { clearTimeout(flushTimer); flushToYjs() }
             wsProvider.disconnect()
             yDoc.destroy()
         }
